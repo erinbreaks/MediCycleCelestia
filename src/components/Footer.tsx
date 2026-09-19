@@ -61,6 +61,32 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               </li>
               <li>
                 <button
+                  onClick={() => {
+                    onNavigate('home');
+                    setTimeout(() => {
+                      document.getElementById('about-us-section')?.scrollIntoView({ behavior: 'smooth' });
+                    }, 100);
+                  }}
+                  className="hover:text-emerald-400 transition-colors text-left"
+                >
+                  About Us (Mission & Vision)
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => {
+                    onNavigate('home');
+                    setTimeout(() => {
+                      document.getElementById('faq-section')?.scrollIntoView({ behavior: 'smooth' });
+                    }, 100);
+                  }}
+                  className="hover:text-emerald-400 transition-colors text-left"
+                >
+                  Frequently Asked Questions (FAQs)
+                </button>
+              </li>
+              <li>
+                <button
                   onClick={() => onNavigate('impact')}
                   className="hover:text-emerald-400 transition-colors text-left"
                 >

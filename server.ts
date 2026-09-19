@@ -192,6 +192,100 @@ Return structured JSON matching the provided schema.`
   }
 });
 
+// Assistance Chatbot API endpoint
+app.post("/api/chat", async (req, res) => {
+  try {
+    const { message, conversationHistory = [] } = req.body;
+    if (!message || typeof message !== "string") {
+      return res.status(400).json({ error: "Message string is required" });
+    }
+
+    const ai = getAI();
+    if (ai) {
+      try {
+        const systemInstruction = `You are MediCycle Assistant, a compassionate, knowledgeable, and helpful AI assistant for the MediCycle platform — an initiative giving medicines a second life across India, with active centers in Bengaluru.
+
+Key Platform Knowledge:
+1. Donating Medicines:
+   - Must have >60 days before expiry date.
+   - Packaging must be intact (unopened blister packs, foil strips, or sealed bottles).
+   - We DO NOT accept opened syrups, partial ointment tubes, refrigerated medicines requiring cold chain, or Schedule X narcotics.
+   - Donors earn 20% MRP in pharmacy reward credits redeemable at partnered pharmacies.
+2. Finding Affordable Medicines & Jan Aushadhi:
+   - Patients can search prescribed salts to find free donated medicines or low-cost generic equivalents from Pradhan Mantri Bhartiya Janaushadhi Pariyojana (PMBJP), saving 50-85%.
+   - Prescription scanning (OCR) automatically identifies medicine names, strengths, and dosage intervals.
+3. Bengaluru Localities:
+   - Partnered pharmacies and drop-off kiosks in Indiranagar, Koramangala, Jayanagar, Malleshwaram, Whitefield, and HSR Layout.
+4. Safe Disposal:
+   - Expired or damaged medicines must never be flushed or thrown into regular trash. MediCycle provides safe disposal bins partnering with certified biomedical waste facilities.
+5. Safety & Disclaimers:
+   - Always include a friendly, concise, and structured reply (use short bullet points when explaining steps).
+   - Remind users that you provide platform navigation and health equity guidance, not medical diagnosis or prescription advice.`;
+
+        // Format history
+        const contents: any[] = [];
+        for (const msg of conversationHistory.slice(-6)) {
+          contents.push({
+            role: msg.sender === "user" ? "user" : "model",
+            parts: [{ text: msg.text }]
+          });
+        }
+        contents.push({
+          role: "user",
+          parts: [{ text: message }]
+        });
+
+        const response = await ai.models.generateContent({
+          model: "gemini-3.6-flash",
+          contents,
+          config: {
+            systemInstruction,
+            temperature: 0.4,
+            maxOutputTokens: 500,
+          }
+        });
+
+        const reply = response.text || "I am here to help you navigate MediCycle. How can I assist you with medicine donations, generic alternatives, or finding nearby pharmacies?";
+        return res.json({
+          reply,
+          source: "gemini-3.6-flash"
+        });
+      } catch (err: any) {
+        console.warn("Gemini chat error, using smart fallback:", err?.message || err);
+      }
+    }
+
+    // Knowledge-base smart fallback if Gemini API is unreachable or key is not provided
+    const lower = message.toLowerCase();
+    let fallbackReply = "";
+
+    if (lower.includes("donate") || lower.includes("donation")) {
+      fallbackReply = "To donate medicines through MediCycle:\n• Ensure medicines have at least 60 days of shelf life remaining.\n• Must be sealed in intact blister strips, foil packaging, or unopened bottles.\n• We do not accept loose tablets, opened liquid syrups, or narcotics.\n• Head over to the **Donor Portal** to list your medicine and receive **20% MRP in Pharmacy Reward Points**!";
+    } else if (lower.includes("accept") || lower.includes("eligible") || lower.includes("criteria") || lower.includes("what can")) {
+      fallbackReply = "Eligible Medicines for Donation:\n• Tablets & capsules in sealed blister packs or intact strips.\n• Expiry date > 60 days away.\n• Clearly readable batch numbers and manufacturing dates.\n\nIneligible Items:\n• Opened bottles/syrups, unsealed ointments, reconstituted insulin/cold-chain products, and Schedule X habit-forming drugs.";
+    } else if (lower.includes("generic") || lower.includes("jan aushadhi") || lower.includes("cheap") || lower.includes("affordable") || lower.includes("price") || lower.includes("cost")) {
+      fallbackReply = "MediCycle helps patients save 50% to 85% by matching branded prescriptions with Jan Aushadhi (PMBJP) verified generic alternatives! You can scan or type your prescription in the **Patient Portal** to instantly view real-time price comparisons and generic substitutes.";
+    } else if (lower.includes("bangalore") || lower.includes("bengaluru") || lower.includes("location") || lower.includes("map") || lower.includes("where")) {
+      fallbackReply = "MediCycle has active partner pharmacies and drop boxes across Bengaluru, including Indiranagar, Koramangala, Jayanagar, Malleshwaram, Whitefield, and HSR Layout. Use our interactive **Bangalore Medicine Map** in the Patient Portal to find stock near your neighborhood.";
+    } else if (lower.includes("expire") || lower.includes("expired") || lower.includes("dispose") || lower.includes("disposal") || lower.includes("waste")) {
+      fallbackReply = "Expired medicines must never be poured down sinks or discarded in municipal trash. MediCycle operates specialized Safe Disposal Bins with verified biomedical waste neutralizers across Bengaluru to ensure zero soil or groundwater contamination.";
+    } else if (lower.includes("reward") || lower.includes("point") || lower.includes("coupon")) {
+      fallbackReply = "Every approved donation earns you **20% of the medicine's Maximum Retail Price (MRP)** in MediCycle Health Reward Points. These can be redeemed for discounts on upcoming purchases at any affiliated pharmacy.";
+    } else if (lower.includes("prescription") || lower.includes("scan") || lower.includes("doctor")) {
+      fallbackReply = "You can upload a photo or PDF of your doctor's prescription in our **Patient Portal**. Our OCR system extracts the salt names and dosages, showing immediate availability from verified community donors, Jan Aushadhi Kendras, and local pharmacies.";
+    } else {
+      fallbackReply = "Hello! I am your MediCycle Assistant. I can help you with:\n1. Donating unused medicines & earning reward points\n2. Finding low-cost Jan Aushadhi generic alternatives\n3. Locating verified pharmacies on our Bengaluru map\n4. Safe disposal guidelines for expired medicines\n\nWhat would you like assistance with today?";
+    }
+
+    return res.json({
+      reply: fallbackReply,
+      source: "assistant-knowledge-base"
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Failed to generate chat reply" });
+  }
+});
+
 // Start server with Vite middleware integration
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {

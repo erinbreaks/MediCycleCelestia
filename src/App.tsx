@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PortalView, ImpactStats, UserProfile } from './types';
+import { PortalView, ImpactStats, UserAuthSession } from './types';
 import { getStats, getRequests } from './services/api';
 import { SafetyNoticeBanner } from './components/SafetyNoticeBanner';
 import { Navbar } from './components/Navbar';
@@ -8,58 +8,78 @@ import { HeroSection } from './components/home/HeroSection';
 import { ImpactDashboard } from './components/home/ImpactDashboard';
 import { ClosedLoopDiagram } from './components/home/ClosedLoopDiagram';
 import { SafeDisposalGuide } from './components/home/SafeDisposalGuide';
+import { AboutUsSection } from './components/home/AboutUsSection';
+import { FaqSection } from './components/home/FaqSection';
 import { PatientPortal } from './components/patient/PatientPortal';
 import { DonorPortal } from './components/donor/DonorPortal';
 import { PharmacyPortal } from './components/pharmacy/PharmacyPortal';
-import { LoginView } from './components/auth/LoginView';
+import { PortalAuthModal } from './components/auth/PortalAuthModal';
+import { AssistanceChatbot } from './components/chat/AssistanceChatbot';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<PortalView>('home');
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>({
-    role: 'patient',
-    name: 'Ananya Sen',
-    phone: '+91 98451 99221',
-    email: 'ananya.sen@example.com',
-    location: 'Indiranagar, Bengaluru'
-  });
-  const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
   const [stats, setStats] = useState<ImpactStats>(getStats());
+  const [activeRequestsCount, setActiveRequestsCount] = useState<number>(0);
   const [searchQueryForPatient, setSearchQueryForPatient] = useState<string>('');
   const [selectedSampleRxId, setSelectedSampleRxId] = useState<string | undefined>(undefined);
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+
+  // Authentication State with local persistence
+  const [authSession, setAuthSession] = useState<UserAuthSession | null>(() => {
+    try {
+      const saved = localStorage.getItem('medicycle_auth_session');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalRole, setAuthModalRole] = useState<'patient' | 'pharmacy'>('patient');
 
   const refreshData = () => {
     setStats(getStats());
+    const reqs = getRequests();
+    const active = reqs.filter(r => r.status !== 'Collected' && r.status !== 'Cancelled').length;
+    setActiveRequestsCount(active);
   };
 
   useEffect(() => {
     refreshData();
   }, []);
 
-  const handleLogin = (profile: UserProfile) => {
-    setCurrentUser(profile);
-    setShowLoginModal(false);
-    if (profile.role === 'patient') {
+  const handleLoginSuccess = (session: UserAuthSession) => {
+    setAuthSession(session);
+    try {
+      localStorage.setItem('medicycle_auth_session', JSON.stringify(session));
+    } catch {
+      // ignore
+    }
+    setAuthModalOpen(false);
+    if (session.role === 'patient') {
       setCurrentView('patient');
-    } else if (profile.role === 'donor') {
-      setCurrentView('donor');
-    } else if (profile.role === 'pharmacy') {
+    } else if (session.role === 'pharmacy') {
       setCurrentView('pharmacy');
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleLogout = () => {
+    setAuthSession(null);
+    try {
+      localStorage.removeItem('medicycle_auth_session');
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleOpenLogin = (role: 'patient' | 'pharmacy' = 'patient') => {
+    setAuthModalRole(role);
+    setAuthModalOpen(true);
+  };
+
   const handleQuickSearch = (query: string) => {
     setSearchQueryForPatient(query);
     setSelectedSampleRxId(undefined);
-    if (currentUser?.role !== 'patient') {
-      setCurrentUser({
-        role: 'patient',
-        name: 'Ananya Sen',
-        phone: '+91 98451 99221',
-        email: 'ananya.sen@example.com',
-        location: 'Indiranagar, Bengaluru'
-      });
-    }
     setCurrentView('patient');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -67,54 +87,11 @@ export default function App() {
   const handleSelectSampleRx = (sampleId: string) => {
     setSelectedSampleRxId(sampleId);
     setSearchQueryForPatient('');
-    if (currentUser?.role !== 'patient') {
-      setCurrentUser({
-        role: 'patient',
-        name: 'Ananya Sen',
-        phone: '+91 98451 99221',
-        email: 'ananya.sen@example.com',
-        location: 'Indiranagar, Bengaluru'
-      });
-    }
     setCurrentView('patient');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleNavigate = (view: PortalView) => {
-    if (view === 'login') {
-      setShowLoginModal(true);
-      return;
-    }
-
-    // If navigating to a portal and role doesn't match, adapt role for seamless demo experience
-    if (view === 'donor' && currentUser?.role !== 'donor') {
-      setCurrentUser({
-        role: 'donor',
-        name: 'Dr. Anita Sharma',
-        phone: '+91 98450 12345',
-        email: 'anita.sharma@example.com',
-        location: 'Defence Colony, Indiranagar',
-        isTrustedDonor: true
-      });
-    } else if (view === 'patient' && currentUser?.role !== 'patient') {
-      setCurrentUser({
-        role: 'patient',
-        name: 'Ananya Sen',
-        phone: '+91 98451 99221',
-        email: 'ananya.sen@example.com',
-        location: 'Indiranagar, Bengaluru'
-      });
-    } else if (view === 'pharmacy' && currentUser?.role !== 'pharmacy') {
-      setCurrentUser({
-        role: 'pharmacy',
-        name: 'CarePlus Community Pharmacy & Dispensary',
-        phone: '+91 80 2528 7766',
-        email: 'contact@carepluspharma.in',
-        location: '100 Feet Rd, Indiranagar',
-        pharmacyName: 'CarePlus Community Pharmacy & Dispensary'
-      });
-    }
-
     setCurrentView(view);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -128,8 +105,10 @@ export default function App() {
       <Navbar
         currentView={currentView}
         onNavigate={handleNavigate}
-        currentUser={currentUser}
-        onOpenLogin={() => setShowLoginModal(true)}
+        activeRequestsCount={activeRequestsCount}
+        authSession={authSession}
+        onOpenLogin={handleOpenLogin}
+        onLogout={handleLogout}
       />
 
       {/* 3. Main Dynamic Content Views */}
@@ -147,7 +126,12 @@ export default function App() {
               onFindClick={() => handleNavigate('patient')}
             />
             <ClosedLoopDiagram />
+            <AboutUsSection onNavigate={handleNavigate} />
             <SafeDisposalGuide />
+            <FaqSection 
+              onNavigate={handleNavigate} 
+              onOpenAssistant={() => setIsChatbotOpen(true)} 
+            />
           </>
         )}
 
@@ -161,7 +145,6 @@ export default function App() {
 
         {currentView === 'donor' && (
           <DonorPortal
-            currentUser={currentUser}
             onDonationCreated={refreshData}
             onNavigateToDisposal={() => handleNavigate('impact')}
           />
@@ -169,7 +152,6 @@ export default function App() {
 
         {currentView === 'pharmacy' && (
           <PharmacyPortal
-            currentUser={currentUser}
             onInventoryUpdated={refreshData}
           />
         )}
@@ -200,29 +182,25 @@ export default function App() {
         )}
       </main>
 
-      {/* 4. Login Modal / Section */}
-      {showLoginModal && (
-        <div className="fixed inset-0 z-50 bg-stone-950/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="relative w-full max-w-5xl my-8">
-            <button
-              onClick={() => setShowLoginModal(false)}
-              className="absolute top-4 right-4 z-10 w-9 h-9 rounded-full bg-white/90 text-stone-700 hover:bg-white hover:text-stone-950 font-bold text-lg flex items-center justify-center shadow-md transition-colors"
-            >
-              ✕
-            </button>
-            <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-stone-200">
-              <LoginView
-                currentRole={currentUser?.role}
-                onLogin={handleLogin}
-                onCancel={() => setShowLoginModal(false)}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 4. Portal Authentication Modal (Fake Password + Easy Verify Captcha) */}
+      <PortalAuthModal
+        isOpen={authModalOpen}
+        initialRole={authModalRole}
+        onLoginSuccess={handleLoginSuccess}
+        onClose={() => setAuthModalOpen(false)}
+      />
 
       {/* 5. Footer */}
       <Footer onNavigate={handleNavigate} />
+
+      {/* 6. Assistance Chatbot Floating Widget (Homepage) */}
+      {currentView === 'home' && (
+        <AssistanceChatbot
+          onNavigate={handleNavigate}
+          isOpenExternal={isChatbotOpen}
+          onToggleExternal={setIsChatbotOpen}
+        />
+      )}
     </div>
   );
 }
