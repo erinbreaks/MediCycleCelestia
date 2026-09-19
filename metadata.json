@@ -1,0 +1,6 @@
+{
+  "name": "MediCycle",
+  "description": "AI-powered medicine redistribution and prescription finder connecting unused eligible medicines with patients, donors, and verified pharmacies.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
